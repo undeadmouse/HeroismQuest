@@ -1,4 +1,5 @@
 local HERO_QUESTS = {}
+local compat = pfQuestCompat
 local locale = GetLocale()
 -- Define the bitmask maps (Standard 1.12 values)
 local classMasks = {
@@ -48,100 +49,6 @@ local function SelectView(view)
   view:Show()
 end
 
-local function AddDependQuests(questDB, id, data, index, depth)
-    local resIdx = index
-    
-    -- 1. 安全检查：任务数据是否存在，以及是否已经完成
-    -- 这里的 id 必须是存在的 key
-    local questDataLocale = pfDB["quests"]["loc"][id]
-    
-    -- 建议使用更稳妥的完成度检查方法
-    local isDone = pfQuest_history and pfQuest_history[id] 
-
-    if type(questDataLocale) == "table" and not isDone and not HERO_QUESTS[id] then
-        local quest = pfBrowser.tabs["quests"].buttons[resIdx]
-        if not quest then return resIdx end -- 按钮用完了，直接返回
-
-        quest.id = id
-        quest:Show()
-        quest:Reload()
-
-        -- 2. 安全拼接名称（防止 zhCN 缺失导致报错）
-        local titleEN = questDataLocale['T'] or "Unknown"
-        local titleCN = ""
-        if pfDB["quests"]["zhCN"] and pfDB["quests"]["zhCN"][id] and locale ~= "zhCN" then
-            titleCN = " " .. (pfDB["quests"]["zhCN"][id]['T'] or "")
-        end
-        quest.name = titleEN .. titleCN
-        
-        -- 3. 递归缩进显示
-        if depth > 0 then
-            quest.name = string.rep("^", depth) .. quest.name
-        end
-        
-        -- 4. 设置 UI 文本
-        quest.text:SetText("|cffffcc00|Hquest:0:0:0:0|h[" .. quest.name .. "]|h|r")
-        HERO_QUESTS[id] = resIdx
-        resIdx = resIdx + 1
-        
-        -- 5. 递归处理前置任务
-        if data and data["pre"] and depth < 10 then -- 增加深度保护
-            for _, qID in ipairs(data["pre"]) do
-                -- 核心：必须确保子任务的数据在数据库中存在
-                if questDB[qID] then
-                    resIdx = AddDependQuests(questDB, qID, questDB[qID], resIdx, depth + 1)
-                end
-            end
-        end
-    end
-    return resIdx
-end
-
-local function ShowFilterQuest(questDB, localeDB, playerLvl, minLvl, maxLvl)
-    -- Hide All
-    HERO_QUESTS = {}
-    for idx, button in pairs(pfBrowser.tabs["quests"].buttons) do
-        button:Hide()
-    end
-    local index = 1
-    for id, data in pairs(questDB) do
-        if type(data) == "table" and CanPlayerDoQuest(data) then
-            local qMin = data["min"] or 0
-            local qLvl = data["lvl"] or 0
-
-            -- Condition 1: min >= playerLevel
-            -- Condition 2: lvl >= playerLevel + 3 AND lvl < playerLevel + 5
-            if qMin <= playerLvl and qLvl >= minLvl and qLvl <= maxLvl and pfQuest_history[id] == nil then
-                -- Try to get the name from the locale table if available
-                index = AddDependQuests(questDB, id, data, index, 0)
-            end
-        end
-    end
-end
-
-local function AddUnit(id, info, index)
-    local unitDataLocale = pfDB["units"]["loc"][id]
-    local resIdx = index
-    local unit = pfBrowser.tabs["units"].buttons[resIdx]
-    if not unit then return resIdx end -- 按钮用完了，直接返回
-
-    unit.id = id
-    unit:Show()
-    unit:Reload()
-
-    -- 2. 安全拼接名称（防止 zhCN 缺失导致报错）
-    local titleEN = unitDataLocale
-    local titleCN = ""
-    if pfDB["units"]["zhCN"] and pfDB["units"]["zhCN"][id] and locale ~= "zhCN" then
-        titleCN = " " .. (pfDB["units"]["zhCN"][id] or "")
-    end
-    unit.name = titleEN .. titleCN
-    
-    -- 4. 设置 UI 文本
-    unit.text:SetText("|cffffcc00|Hquest:0:0:0:0|h[" .. unit.name .. "]|h|r")
-    resIdx = resIdx + 1
-    return resIdx
-end
 
 local function ShowFilterUnit(minLvl, maxLvl)
     local unitDB = pfDB["units"]["data"]
@@ -170,14 +77,134 @@ local function ShowFilterUnit(minLvl, maxLvl)
     end
 end
 
-local function SearchQuestTable(questDB, localeDB, playerLvl, minLvl, maxLvl)
-    if not questDB or not pfBrowser then
-        return
+local function updateQuestText(ret)
+    for idx, button in pairs(pfBrowser.tabs["quests"].buttons) do
+        if button.id and ret[button.id] then
+            button.text:SetText(ret[button.id])
+        end
     end
+end
+
+local function AddDependQuests(ret, questDB, id, data, depth)
+    -- 1. 安全检查：任务数据是否存在，以及是否已经完成
+    -- 这里的 id 必须是存在的 key
+    local questDataLocale = pfDB["quests"]["loc"][id]
+    -- 建议使用更稳妥的完成度检查方法
+    local isDone = pfQuest_history and pfQuest_history[id] 
+    if type(questDataLocale) == "table" and not isDone and not HERO_QUESTS[id] then
+        -- 2. 安全拼接名称（防止 zhCN 缺失导致报错）
+        local titleEN = questDataLocale['T'] or "Unknown"
+        local titleCN = ""
+        if pfDB["quests"]["zhCN"] and pfDB["quests"]["zhCN"][id] and locale ~= "zhCN" then
+            titleCN = " " .. (pfDB["quests"]["zhCN"][id]['T'] or "")
+        end
+        local name = titleEN .. titleCN
+        
+        -- 3. 递归缩进显示
+        if depth > 0 then
+            name = string.rep("^", depth) .. name
+        end
+        
+        ret[id] = "|cffffcc00|Hquest:0:0:0:0|h[" .. name .. "]|h|r"
+        print(id, name)
+        -- 5. 递归处理前置任务
+        if data and data["pre"] and depth < 10 then -- 增加深度保护
+            for _, qID in ipairs(data["pre"]) do
+                -- 核心：必须确保子任务的数据在数据库中存在
+                if questDB[qID] then
+                    AddDependQuests(ret, questDB, qID, questDB[qID], depth + 1)
+                end
+            end
+        end
+    end
+    return resIdx
+end
+
+local function filterQuest(ret, questDB, localeDB, playerLvl, minLvl, maxLvl)
+    -- Hide All
+    HERO_QUESTS = {}
+    for id, data in pairs(questDB) do
+        if type(data) == "table" and CanPlayerDoQuest(data) then
+            local qMin = data["min"] or 0
+            local qLvl = data["lvl"] or 0
+            -- Condition 1: min >= playerLevel
+            -- Condition 2: lvl >= playerLevel + 3 AND lvl < playerLevel + 5
+            if qMin <= playerLvl and qLvl >= minLvl and qLvl <= maxLvl and pfQuest_history[id] == nil then
+                -- Try to get the name from the locale table if available
+                AddDependQuests(ret, questDB, id, data, 0)
+            end
+        end
+    end
+end
+
+local function AddUnit(ret, id, info)
+    local unitDataLocale = pfDB["units"]["loc"][id]
+
+    -- 2. 安全拼接名称（防止 zhCN 缺失导致报错）
+    local titleEN = unitDataLocale
+    local titleCN = ""
+    if pfDB["units"]["zhCN"] and pfDB["units"]["zhCN"][id] and locale ~= "zhCN" then
+        titleCN = " " .. (pfDB["units"]["zhCN"][id] or "")
+    end
+    local name = titleEN .. titleCN
+    
+    -- 4. 设置 UI 文本
+    -- unit.text:SetText("|cffffcc00|Hquest:0:0:0:0|h[" .. unit.name .. "]|h|r")
+    ret[id] = "|cffffcc00|Hquest:0:0:0:0|h[" .. name .. "]|h|r"
+end
+
+local function filterUnit(ret, minLvl, maxLvl)
+    local unitDB = pfDB["units"]["data"]
+    for id, info in pairs(unitDB) do
+        if type(info) == "table" and not info.fac then
+            local low, high
+            -- 解析 lvl 字符串 (处理 "8-9" 或 "10" 格式)
+            if string.find(info.lvl, "-") then
+                _, _, low, high = string.find(info.lvl, "(%d+)-(%d+)")
+            else
+                low = info.lvl
+                high = info.lvl
+            end
+            low = tonumber(low)
+            high = tonumber(high)
+            -- 范围重叠逻辑判断
+            -- 只要单位的等级范围与你的目标范围有交集，就判定为符合
+            if low and high and (low <= maxLvl and high >= minLvl) then
+                index = AddUnit(ret, id, info)
+            end
+        end
+    end
+end
+
+local oldGetID = pfDatabase.GetIDByName
+function pfDatabase:GetIDByName(name, db, partial, server)
+    local playerLevel = UnitLevel("player")
+    local minL = playerLevel + 3
+    local maxL = playerLevel + 3
+    if name == "**hero**" and db == "units" then
+        local ret = {}
+        filterUnit(ret, minL, maxL)
+        return ret
+    end
+    if name == "**hero**" and db == "quests" then
+        local ret = {}
+        filterQuest(ret, pfDB["quests"]["data"], pfDB["quests"]["loc"], playerLevel, minL, maxL)
+        return ret
+    end
+    return oldGetID(self, name, db, partial, server)
+end
+
+
+HeroismQuestSearch = function(minLvl, maxLvl, requiredLvl)
+    local playerLevel = requiredLvl or UnitLevel("player")
+    local minL = minLvl or playerLevel + 3
+    local maxL = maxLvl or playerLevel + 3
+
+    local searchText = "**hero**"
     pfBrowser:Show()
     SelectView(pfBrowser.tabs["quests"])
-    pfBrowser.input:SetText("all")
-
+    pfBrowser.input:SetText(searchText)
+ 
     local totalElapsed = 0
     local delay = 0.1 -- 想要延迟 5 秒
 
@@ -188,20 +215,10 @@ local function SearchQuestTable(questDB, localeDB, playerLvl, minLvl, maxLvl)
         
         if totalElapsed >= delay then
             -- 在这里执行你的代码
-            ShowFilterQuest(questDB, localeDB, playerLvl, minLvl, maxLvl)
-            ShowFilterUnit(minLvl, maxLvl)
+            local ret = pfDatabase:GetIDByName(pfBrowser.input:GetText(), "quests", true, nil) 
+            updateQuestText(ret)
             -- 执行完后关闭计时器
             timerFrame:SetScript("OnUpdate", nil)
         end
     end)
-end
-
-HeroismQuestSearch = function(minLvl, maxLvl, requiredLvl)
-    local playerLevel = requiredLvl or UnitLevel("player")
-    local minL = minLvl or playerLevel + 3
-    local maxL = maxLvl or playerLevel + 3
-
-    if (pfDB and pfDB["quests"] and pfDB["quests"]["data"] and pfDB["quests"]["loc"]) then
-        SearchQuestTable(pfDB["quests"]["data"], pfDB["quests"]["loc"], playerLevel, minL, maxL)
-    end
 end
