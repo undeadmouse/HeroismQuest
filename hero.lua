@@ -1,4 +1,5 @@
 local HERO_QUESTS = {}
+local HERO_QUESTS_ORD = {}
 local compat = pfQuestCompat
 local locale = GetLocale()
 -- Define the bitmask maps (Standard 1.12 values)
@@ -77,11 +78,14 @@ local function ShowFilterUnit(minLvl, maxLvl)
     end
 end
 
+
 local function updateQuestText(ret)
-    for idx, button in pairs(pfBrowser.tabs["quests"].buttons) do
-        if button.id and ret[button.id] then
-            button.text:SetText(ret[button.id])
-        end
+    for idx, id in ipairs(HERO_QUESTS_ORD) do
+        local quest = pfBrowser.tabs["quests"].buttons[idx]
+        if not quest then return end
+        quest.id = id
+        quest:Reload()
+        quest.text:SetText(ret[id])
     end
 end
 
@@ -106,7 +110,8 @@ local function AddDependQuests(ret, questDB, id, data, depth)
         end
         
         ret[id] = "|cffffcc00|Hquest:0:0:0:0|h[" .. name .. "]|h|r"
-        print(id, name)
+        HERO_QUESTS[id] = id
+        table.insert(HERO_QUESTS_ORD, id)
         -- 5. 递归处理前置任务
         if data and data["pre"] and depth < 10 then -- 增加深度保护
             for _, qID in ipairs(data["pre"]) do
@@ -123,6 +128,7 @@ end
 local function filterQuest(ret, questDB, localeDB, playerLvl, minLvl, maxLvl)
     -- Hide All
     HERO_QUESTS = {}
+    HERO_QUESTS_ORD = {}
     for id, data in pairs(questDB) do
         if type(data) == "table" and CanPlayerDoQuest(data) then
             local qMin = data["min"] or 0
