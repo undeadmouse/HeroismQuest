@@ -1,5 +1,16 @@
--- 1. 全局配置 (角度变量)
-if not HQ_MinimapPos then HQ_MinimapPos = 45 end
+-- 1. 核心：处理变量初始化与位置恢复
+-- 创建一个隐藏框架来监听插件加载事件
+-- 如果是第一次运行，没有保存过值，则初始化为 45
+if not HQ_MinimapPos then 
+    HQ_MinimapPos = 45 
+end
+local HQ_Loader = CreateFrame("Frame")
+HQ_Loader:RegisterEvent("VARIABLES_LOADED")
+HQ_Loader:SetScript("OnEvent", function()
+    -- 变量加载完成后，更新一次位置
+    HQ_UpdateMinimapPos()
+    HQ_MinimapButton:Show()
+end)
 
 -- 2. 创建按钮
 HQ_MinimapButton = CreateFrame("Button", "HQ_MinimapButton", Minimap)
@@ -25,7 +36,7 @@ border:SetPoint("TOPLEFT", 0, 0)
 
 -- 5. 位置更新函数
 function HQ_UpdateMinimapPos()
-    local radius = 80 -- 小地图半径
+    local radius = 80
     local x = math.cos(math.rad(HQ_MinimapPos)) * radius
     local y = math.sin(math.rad(HQ_MinimapPos)) * radius
     HQ_MinimapButton:SetPoint("CENTER", Minimap, "CENTER", x, y)
