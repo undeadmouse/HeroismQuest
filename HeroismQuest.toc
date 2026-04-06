@@ -1,0 +1,8 @@
+## Interface: 11200
+## Title: HeroismQuest
+## Version: 1.00
+## Notes: Search quests for the Trial of Heroism challenge.
+## RequiredDeps: pfQuest
+
+hero.lua
+heroUI.lua
