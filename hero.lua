@@ -258,5 +258,7 @@ HeroismQuestSearch = function(minLvl, maxLvl, requiredLvl)
 
     pfBrowser:Show()
     SelectView(pfBrowser.tabs["quests"])
+    -- clear result first
+    pfBrowser.input:SetText("")
     pfBrowser.input:SetText(HQ_SearchText)
 end
