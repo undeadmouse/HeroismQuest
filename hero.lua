@@ -209,7 +209,7 @@ end
 function pfDatabase:GetIDByName(name, db, partial, server)
     -- 1. 拦截检查：是否以 *hero 开头
     -- 使用 ^ 匹配字符串开头，转义 * 号使用 %*
-    local isHero = string.find(name, "^%*hero%*")
+    local isHero = name ~= nil and string.find(name, "^%*hero%*")
     
     if not isHero then
         -- 如果不是以 *hero* 开头，立即返回原函数结果
