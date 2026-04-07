@@ -2,7 +2,7 @@
 ## Title: HeroismQuest
 ## Version: 1.00
 ## Notes: Search quests for the Trial of Heroism challenge.
-## SavedVariables: HQ_MinimapPos
+## SavedVariables: HQ_MinimapPos, HQ_SearchText
 ## RequiredDeps: pfQuest
 
 hero.lua

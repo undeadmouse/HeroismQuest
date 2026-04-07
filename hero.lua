@@ -15,6 +15,10 @@ local raceMasks = {
     ["Goblin"] = 256, ["HighElf"] = 512 
 }
 
+if not HQ_SearchText or not string.find(HQ_SearchText, "^%*hero%*") then
+    HQ_SearchText = "*hero*"
+end
+
 --- Checks if the player meets the requirements for a pfQuest data entry
 -- @param questData The table containing ["class"] and ["race"] keys
 -- @return boolean True if the player matches, false otherwise
@@ -183,36 +187,10 @@ local function filterUnit(ret, minLvl, maxLvl)
 end
 
 local oldGetID = pfDatabase.GetIDByName
-function pfDatabase:GetIDByName(name, db, partial, server)
-    local playerLevel = UnitLevel("player")
-    local minL = playerLevel + 3
-    local maxL = playerLevel + 3
-    if name == "**hero**" and db == "units" then
-        local ret = {}
-        filterUnit(ret, minL, maxL)
-        return ret
-    end
-    if name == "**hero**" and db == "quests" then
-        local ret = {}
-        filterQuest(ret, pfDB["quests"]["data"], pfDB["quests"]["loc"], playerLevel, minL, maxL)
-        return ret
-    end
-    return oldGetID(self, name, db, partial, server)
-end
 
-
-HeroismQuestSearch = function(minLvl, maxLvl, requiredLvl)
-    local playerLevel = requiredLvl or UnitLevel("player")
-    local minL = minLvl or playerLevel + 3
-    local maxL = maxLvl or playerLevel + 3
-
-    local searchText = "**hero**"
-    pfBrowser:Show()
-    SelectView(pfBrowser.tabs["quests"])
-    pfBrowser.input:SetText(searchText)
- 
+function delayUpdateText(ret)
     local totalElapsed = 0
-    local delay = 0.1 -- 想要延迟 5 秒
+    local delay = 0.2 -- 想要延迟 0.2 秒
 
     local timerFrame = CreateFrame("Frame")
     timerFrame:SetScript("OnUpdate", function()
@@ -221,10 +199,64 @@ HeroismQuestSearch = function(minLvl, maxLvl, requiredLvl)
         
         if totalElapsed >= delay then
             -- 在这里执行你的代码
-            local ret = pfDatabase:GetIDByName(pfBrowser.input:GetText(), "quests", true, nil) 
             updateQuestText(ret)
             -- 执行完后关闭计时器
             timerFrame:SetScript("OnUpdate", nil)
         end
     end)
+end
+
+function pfDatabase:GetIDByName(name, db, partial, server)
+    -- 1. 拦截检查：是否以 *hero 开头
+    -- 使用 ^ 匹配字符串开头，转义 * 号使用 %*
+    local isHero = string.find(name, "^%*hero%*")
+    
+    if not isHero then
+        -- 如果不是以 *hero* 开头，立即返回原函数结果
+        return oldGetID(self, name, db, partial, server)
+    end
+
+    -- save the search text
+    HQ_SearchText = name
+
+    -- 2. 解析参数：提取格式为 *hero*增量,玩家等级 的数字
+    local _, _, diff, pLevel = string.find(name, "^%*hero%*(%d*)[%,%*]?(%d*)")    
+
+    -- 转换为数字，如果解析失败则给默认值
+    local diffLvl = tonumber(diff) or 3   -- 默认比玩家高 3 级
+    local playerLvl = tonumber(pLevel) or UnitLevel("player")
+    
+    -- 3. 计算目标等级区间
+    local targetLvl = playerLvl + diffLvl
+    local minL = targetLvl
+    local maxL = targetLvl
+
+    -- 4. 执行自定义过滤逻辑
+    local ret = {}
+    if db == "units" then
+        if filterUnit then 
+            filterUnit(ret, minL, maxL) 
+        end
+        return ret
+    elseif db == "quests" then
+        if pfDB and pfDB["quests"] and filterQuest then
+            filterQuest(ret, pfDB["quests"]["data"], pfDB["quests"]["loc"], playerLvl, minL, maxL)
+        end
+        delayUpdateText(ret)
+        return ret
+    end
+
+    -- 兜底返回空表或原函数
+    return ret
+end
+
+
+HeroismQuestSearch = function(minLvl, maxLvl, requiredLvl)
+    local playerLevel = requiredLvl or UnitLevel("player")
+    local minL = minLvl or playerLevel + 3
+    local maxL = maxLvl or playerLevel + 3
+
+    pfBrowser:Show()
+    SelectView(pfBrowser.tabs["quests"])
+    pfBrowser.input:SetText(HQ_SearchText)
 end
