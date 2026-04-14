@@ -12,7 +12,7 @@ local raceMasks = {
     ["Human"] = 1, ["Orc"] = 2, ["Dwarf"] = 4, ["NightElf"] = 8,
     ["Undead"] = 16, ["Tauren"] = 32, ["Gnome"] = 64, ["Troll"] = 128,
     -- Turtle WoW specific:
-    ["Goblin"] = 256, ["HighElf"] = 512 
+    ["Goblin"] = 256, ["BloodElf"] = 512 
 }
 
 if not HQ_SearchText or not string.find(HQ_SearchText, "^%*hero%*") then
